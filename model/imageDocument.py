@@ -1,15 +1,15 @@
 from datetime import datetime, timezone, timedelta
 from model import db  # Import db dari model/__init__.py
 
-class Document(db.Model):
-    __tablename__ = 'documents'
+class imageDocument(db.Model):
+    __tablename__ = 'image_document'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    document_id = db.Column(db.Integer, db.ForeignKey('documents.id'), nullable=False)
     filename = db.Column(db.String(255), nullable=False)
     file_path = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc )+ timedelta(hours=7))
 
 
     # Relasi ke User (opsional, untuk akses user dari document)
-    user = db.relationship('User', backref=db.backref('documents', lazy=True))
+    user = db.relationship('Document', backref=db.backref('image_document', lazy=True))
