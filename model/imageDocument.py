@@ -12,4 +12,4 @@ class imageDocument(db.Model):
 
 
     # Relasi ke User (opsional, untuk akses user dari document)
-    user = db.relationship('Document', backref=db.backref('image_document', lazy=True))
+    document = db.relationship('Document', backref=db.backref('image_document', lazy=True))

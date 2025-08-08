@@ -4,6 +4,36 @@
 <title>Home || Genius Paper</title>
 {% endblock %}
 {% block script %}
+{{ super() }}
+<script src="{{ url_for('static', filename='assets/libs/apexcharts/dist/apexcharts.min.js') }}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    {% for image in document.image_document %}
+        {% if image.prediction %}
+            {% set conf = (image.prediction.confidence * 100) | round(2) %}
+            {% if image.prediction.result == 'asli' %}
+                var series{{ image.id }} = [{{ conf }}, {{ 100 - conf }}];
+            {% else %}
+                var series{{ image.id }} = [{{ 100 - conf }}, {{ conf }}];
+            {% endif %}
+            var options{{ image.id }} = {
+                chart: {
+                    type: 'pie',
+                    height: 300
+                },
+                labels: ['Asli', 'Palsu'],
+                series: series{{ image.id }},
+                colors: ['#4F73D9', '#FA896B'],
+                title: {
+                    text: 'Hasil prediksi'
+                }
+            };
+            var chart{{ image.id }} = new ApexCharts(document.querySelector("#chart-pie-simple-{{ image.id }}"), options{{ image.id }});
+            chart{{ image.id }}.render();
+        {% endif %}
+    {% endfor %}
+});
+</script>
 {% endblock %}
 {% block content %}
 <div class="body-wrapper">
@@ -59,15 +89,14 @@
                     </div>
                     <div class="app-invoice">
                         <ul class="overflow-auto invoice-users" data-simplebar>
-                           {% for document in documents %}
+                            {% for document in documents %}
                             <li>
-                                <a href="javascript:void(0)"
+                                <a href="/?doc_id={{ document.id }}"
                                     class="p-3 bg-hover-light-black border-bottom border-primary d-flex align-items-start invoice-user listing-user bg-light-subtle"
                                     id="invoice-123" data-invoice-id="123">
 
                                     <div class="m d-inline-block w-75">
                                         <h6 class="mb-2 invoice-customer">{{ document.filename }}</h6>
-                                        
                                         <span class="fs-3 invoice-date text-nowrap text-body-color d-block">
                                             {{ document.created_at.strftime('%Y-%m-%d %H:%M') if document.created_at }}
                                         </span>
@@ -80,226 +109,150 @@
                         </ul>
                     </div>
                 </div>
-                <div class="w-75 w-xs-100 chat-container">
+                <div class="w-75 w-xs-100 chat-container ">
+                    {% if document %}
                     <div class="invoice-inner-part h-100">
-                        <div class="invoiceing-box">
+                        <div class="">
                             <div class="invoice-header d-flex align-items-center border-bottom p-3">
-                                <h4 class=" text-uppercase mb-0">Dokumen</h4>
+                                <h4 class=" text-uppercase mb-0">{{ "Detail Dokumen" if document else "" }}</h4>
                                 <div class="ms-auto">
-                                    <h4 class="invoice-number">Surat Jalan Dinas A</h4>
+                                    <h4 class="invoice-number">
+                                        {{ document.filename if document else "" }}</h4>
                                 </div>
                             </div>
-                            <div class="p-3" id="custom-invoice">
-                                <div class="invoice-123" id="printableArea">
-                                    <div class="row pt-3">
-                                        <div class="col-md-12">
-                                            <div>
-                                                <address>
-                                                    <h6>&nbsp;From,</h6>
-                                                    <h6 class="fw-bold">&nbsp;Steve Jobs</h6>
-                                                    <p class="ms-1">
-                                                        1108, Clair Street,
-                                                        <br />Massachusetts,
-                                                        <br />Woods Hole - 02543
-                                                    </p>
-                                                </address>
-                                            </div>
-                                            <div class="text-end">
-                                                <address>
-                                                    <h6>To,</h6>
-                                                    <h6 class="fw-bold invoice-customer">
-                                                        James Anderson,
-                                                    </h6>
-                                                    <p class="ms-4">
-                                                        455, Shobe Lane,
-                                                        <br />Colorado,
-                                                        <br />Fort
-                                                        Collins - 80524
-                                                    </p>
-                                                    <p class="mt-4 mb-1">
-                                                        <span>Invoice Date :</span>
-                                                        <i class="ti ti-calendar"></i>
-                                                        23rd Jan 2021
-                                                    </p>
-                                                    <p>
-                                                        <span>Due Date :</span>
-                                                        <i class="ti ti-calendar"></i>
-                                                        25th Jan 2021
-                                                    </p>
-                                                </address>
-                                            </div>
+
+                        </div>
+                        <div class="p-3 ">
+                            <div class=" h-100">
+                                {% if document %}
+                                {% if document.file_path.endswith('.pdf') %}
+                                <object data="{{ url_for('static', filename=document.file_path) }}"
+                                    type="application/pdf" height="600px" width="100%">
+                                </object>
+                                {% elif document.file_path.endswith('.jpg') or document.file_path.endswith('.jpeg') or
+                                document.file_path.endswith('.png') or document.file_path.endswith('.gif') %}
+                                <img src="{{ url_for('static', filename=document.file_path) }}"
+                                    alt="{{ document.filename }}" class="img-fluid" />
+                                {% else %}
+                                <a href="{{ url_for('static', filename=document.file_path) }}" target="_blank">Download
+                                    File</a>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                            <div>
+                                <div class="row mt-5">
+                                    <div>
+                                        <h1 class="text-center">Hasil Prediksi</h1>
+                                    </div>
+                                    {% for image in document.image_document %}
+                                    <div class="row">
+                                        <div class="col-12 col-lg-6">
+                                            <img width="100%" src="{{ url_for('static',filename=image.file_path) }}"
+                                                alt="">
                                         </div>
-                                        <div class="col-md-12">
-                                            <div class="table-responsive mt-5">
-                                                <table class="table table-hover">
-                                                    <thead>
-                                                        <!-- start row -->
-                                                        <tr>
-                                                            <th class="text-center">#</th>
-                                                            <th>Description</th>
-                                                            <th class="text-end">Quantity</th>
-                                                            <th class="text-end">Unit Cost</th>
-                                                            <th class="text-end">Total</th>
-                                                        </tr>
-                                                        <!-- end row -->
-                                                    </thead>
-                                                    <tbody>
-                                                        <!-- start row -->
-                                                        <tr>
-                                                            <td class="text-center">1</td>
-                                                            <td>Milk Powder</td>
-                                                            <td class="text-end">2</td>
-                                                            <td class="text-end">$24</td>
-                                                            <td class="text-end">$48</td>
-                                                        </tr>
-                                                        <!-- end row -->
-                                                        <!-- start row -->
-                                                        <tr>
-                                                            <td class="text-center">2</td>
-                                                            <td>Air Conditioner</td>
-                                                            <td class="text-end">5</td>
-                                                            <td class="text-end">$500</td>
-                                                            <td class="text-end">$2500</td>
-                                                        </tr>
-                                                        <!-- end row -->
-                                                        <!-- start row -->
-                                                        <tr>
-                                                            <td class="text-center">3</td>
-                                                            <td>RC Cars</td>
-                                                            <td class="text-end">30</td>
-                                                            <td class="text-end">$600</td>
-                                                            <td class="text-end">$18000</td>
-                                                        </tr>
-                                                        <!-- end row -->
-                                                        <!-- start row -->
-                                                        <tr>
-                                                            <td class="text-center">4</td>
-                                                            <td>Down Coat</td>
-                                                            <td class="text-end">62</td>
-                                                            <td class="text-end">$5</td>
-                                                            <td class="text-end">$310</td>
-                                                        </tr>
-                                                        <!-- end row -->
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-12">
-                                            <div class="pull-right mt-4 text-end">
-                                                <p>Sub - Total amount: $20,858</p>
-                                                <p>vat (10%) : $2,085</p>
-                                                <hr />
-                                                <h3>
-                                                    <b>Total :</b> $22,943
-                                                </h3>
-                                            </div>
-                                            <div class="clearfix"></div>
-                                            <hr />
-                                            <div class="text-end">
-                                                <button class="btn bg-danger-subtle text-danger" type="submit">
-                                                    Proceed to payment
-                                                </button>
-                                                <button class="btn btn-primary btn-default print-page ms-6"
-                                                    type="button">
-                                                    <span>
-                                                        <i class="ti ti-printer fs-5"></i>
-                                                        Print
-                                                    </span>
-                                                </button>
-                                            </div>
+                                        <div class="col-12 col-lg-6">
+                                            {% if image.prediction %}
+                                            <div id="chart-pie-simple-{{ image.id }}" style="height:300px;"></div>
+
+                                            {% else %}
+                                            Belum ada prediksi
+                                            {% endif %}
                                         </div>
                                     </div>
+                                    {% endfor %}
                                 </div>
+                            </div>
+                        </div>
+                        <div class="offcanvas offcanvas-start user-chat-box" tabindex="-1" id="chat-sidebar"
+                            aria-labelledby="offcanvasExampleLabel">
+                            <div class="offcanvas-header">
+                                <h5 class="offcanvas-title" id="offcanvasExampleLabel">
+                                    Document List
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
+                                    aria-label="Close"></button>
+                            </div>
+                            <div class="p-3 border-bottom ">
+                                <!-- <form class="position-relative"> -->
+                                <button type="button"
+                                    class="btn w-100 rounded-pill waves-effect waves-light btn-primary">
+                                    Periksa Document &nbsp;<i class="ti ti-search"></i>
+                                </button>
+                                <!-- </form> -->
+                            </div>
+                            <div class="app-invoice overflow-auto">
+                                <ul class="invoice-users">
+                                    {% for document in documents %}
+                                    <li>
+                                        <a href="javascript:void(0)"
+                                            class="p-3 bg-hover-light-black border-bottom border-primary d-flex align-items-start invoice-user listing-user bg-light-subtle"
+                                            id="invoice-123" data-invoice-id="123">
+
+                                            <div class="m d-inline-block w-75">
+                                                <h6 class="mb-2 invoice-customer">{{ document.filename }}</h6>
+
+                                                <span class="fs-3 invoice-date text-nowrap text-body-color d-block">
+                                                    {{ document.created_at.strftime('%Y-%m-%d %H:%M') if
+                                                    document.created_at }}
+                                                </span>
+                                            </div>
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+
+                                </ul>
+                            </div>
+                        </div>
+                        <!-- Vertically centered modal -->
+                      
+                    </div>
+                    {% endif %}
+                      <div class="modal fade" id="vertical-center-scroll-modal" tabindex="-1"
+                            aria-labelledby="vertical-center-modal" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                                <form action="/" method="post" enctype="multipart/form-data">
+
+                                    <div class="modal-content">
+                                        <div class="modal-header d-flex align-items-center">
+                                            <h4 class="modal-title" id="myLargeModalLabel">
+                                                Unggah Dokumen
+                                            </h4>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                                aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="row">
+                                                <div class="mb-3">
+                                                    <label for="filename" class="form-label">Nama File</label>
+                                                    <input required name="filename" type="text" class="form-control"
+                                                        id="filename">
+                                                </div>
+                                            </div>
+                                            <div class="row">
+                                                <div class=" mb-3">
+                                                    <label for="filename" class="form-label">File</label>
+                                                    <input required class="form-control" name="file" type="file" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button"
+                                                class="btn bg-danger-subtle text-danger  waves-effect text-start"
+                                                data-bs-dismiss="modal">
+                                                Close
+                                            </button>
+                                            <button type="submit"
+                                                class="btn bg-primary-subtle text-primary  waves-effect text-start">
+                                                Unggah
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
 
                             </div>
                         </div>
-                    </div>
-                </div>
-                <div class="offcanvas offcanvas-start user-chat-box" tabindex="-1" id="chat-sidebar"
-                    aria-labelledby="offcanvasExampleLabel">
-                    <div class="offcanvas-header">
-                        <h5 class="offcanvas-title" id="offcanvasExampleLabel">
-                            Document List
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-                    </div>
-                    <div class="p-3 border-bottom ">
-                        <!-- <form class="position-relative"> -->
-                        <button type="button" class="btn w-100 rounded-pill waves-effect waves-light btn-primary">
-                            Periksa Document &nbsp;<i class="ti ti-search"></i>
-                        </button>
-                        <!-- </form> -->
-                    </div>
-                    <div class="app-invoice overflow-auto">
-                        <ul class="invoice-users">
-                          {% for document in documents %}
-                            <li>
-                                <a href="javascript:void(0)"
-                                    class="p-3 bg-hover-light-black border-bottom border-primary d-flex align-items-start invoice-user listing-user bg-light-subtle"
-                                    id="invoice-123" data-invoice-id="123">
-
-                                    <div class="m d-inline-block w-75">
-                                        <h6 class="mb-2 invoice-customer">{{ document.filename }}</h6>
-                                        
-                                        <span class="fs-3 invoice-date text-nowrap text-body-color d-block">
-                                            {{ document.created_at.strftime('%Y-%m-%d %H:%M') if document.created_at }}
-                                        </span>
-                                    </div>
-                                </a>
-                            </li>
-                            {% endfor %}
-
-                        </ul>
-                    </div>
-                </div>
-                <!-- Vertically centered modal -->
-                <div class="modal fade" id="vertical-center-scroll-modal" tabindex="-1"
-                    aria-labelledby="vertical-center-modal" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-                        <form action="/" method="post" enctype="multipart/form-data">
-
-                            <div class="modal-content">
-                                <div class="modal-header d-flex align-items-center">
-                                    <h4 class="modal-title" id="myLargeModalLabel">
-                                        Unggah Dokumen
-                                    </h4>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"
-                                        aria-label="Close"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div class="row">
-                                        <div class="mb-3">
-                                            <label for="filename" class="form-label">Nama File</label>
-                                            <input required name="filename" type="text" class="form-control"
-                                                id="filename">
-                                        </div>
-                                    </div>
-                                    <div class="row">
-                                        <div class=" mb-3">
-                                            <label for="filename" class="form-label">File</label>
-                                            <input required class="form-control" name="file" type="file" />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button"
-                                        class="btn bg-danger-subtle text-danger  waves-effect text-start"
-                                        data-bs-dismiss="modal">
-                                        Close
-                                    </button>
-                                    <button type="submit"
-                                        class="btn bg-primary-subtle text-primary  waves-effect text-start">
-                                        Unggah
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-
-                    </div>
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
-{% endblock %}
+        {% endblock %}
