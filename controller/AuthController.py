@@ -2,6 +2,7 @@ from model.user import User
 from model import db
 import bcrypt
 from flask_login import login_user as flask_login_user
+from flask_login import logout_user as flask_logout_user
 
 
 def login_user(username, password):
@@ -15,6 +16,15 @@ def login_user(username, password):
 
     flask_login_user(user)  # Login user, session diatur oleh flask_login
     return True, 'Login berhasil.'
+
+def logout_user():
+    try:
+        flask_logout_user()
+        return True, 'Logout berhasil.'
+    except Exception as e:
+        with open("log.txt", "a") as log_file:
+            log_file.write(f"Error during logout: {str(e)}\n")
+        return False, f'Terjadi kesalahan saat logout: {str(e)}'
 
 def register_user(username, password, confirm_password):
     # Validasi field

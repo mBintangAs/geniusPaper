@@ -50,12 +50,12 @@ def upload_image(filename, file, user_id):
         db.session.add(document)
         db.session.commit()
         if ext.lower() == '.pdf':
-            images = convert_from_path(save_path, dpi=300)
+            images = convert_from_path(save_path, dpi=300, poppler_path="/usr/bin")
             for i, image in enumerate(images):
                 img_filename = f"{uuid.uuid4().hex}_page{i+1}.jpg"
                 img_path = os.path.join(UPLOAD_FOLDER, img_filename)
                 image.save(img_path)
-                
+                print(f"Saved image: {img_path}")
                 image_doc = ImageDocument(
                     document_id=document.id,
                     filename=img_filename,
@@ -63,7 +63,7 @@ def upload_image(filename, file, user_id):
                 )
                 db.session.add(image_doc)
                 db.session.commit()
-                predict_image(image_doc.id)
+                predict_image2(image_doc.id)
         else:
             image_doc = ImageDocument(
                 document_id=document.id,
@@ -72,12 +72,13 @@ def upload_image(filename, file, user_id):
             )
             db.session.add(image_doc)
             db.session.commit()
-            predict_image(image_doc.id)
+            print(f"Saved image document: {image_doc.file_path}")
+            predict_image2(image_doc.id)
 
         return True, "File berhasil diupload dan disimpan."
     except Exception as e:
-        if os.path.exists(save_path):
-            os.remove(save_path)
+        # if os.path.exists(save_path):
+            # os.remove(save_path)
         db.session.rollback()
         return False, f"Terjadi kesalahan: {str(e)}"
     
@@ -88,8 +89,8 @@ def predict_image(image_document_id):
         if not image_document:
             return False, "Image document tidak ditemukan."
         
-        scaler_path = os.path.join(BASE_DIR, '..', 'scaler_glcm.pkl')
-        model_path = os.path.join(BASE_DIR, '..', 'model_ann_autentikasi.keras')
+        scaler_path = os.path.join(BASE_DIR, '..', 'scaler_glcm-30092025.pkl')
+        model_path = os.path.join(BASE_DIR, '..', 'model_ann_autentikasi-30092025.keras')
 
         scaler = joblib.load(os.path.abspath(scaler_path))
         model = load_model(os.path.abspath(model_path))
@@ -158,3 +159,93 @@ def ekstrak_glcm_fitur(image_path):
         graycoprops(glcm, 'correlation')[0, 0]
     ]
     return np.array(features)
+
+from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
+from skimage.io import imread
+import numpy as np
+
+def ekstrak_glcm_fitur2(image):
+   
+    angles = [0, np.pi/4, np.pi/2, 3*np.pi/4]
+    glcm = graycomatrix(image, distances=[1], angles=angles, levels=256, symmetric=True, normed=True)
+    features = [
+        graycoprops(glcm, 'contrast').mean(),
+        graycoprops(glcm, 'dissimilarity').mean(),
+        graycoprops(glcm, 'homogeneity').mean(),
+        graycoprops(glcm, 'energy').mean(),
+        graycoprops(glcm, 'correlation').mean()
+    ]
+    return features
+
+def ekstrak_lbp_fitur(image, P=24, R=3, eps=1e-7):
+    lbp = local_binary_pattern(image, P, R, method="uniform")
+    (hist, _) = np.histogram(lbp.ravel(),
+                             bins=np.arange(0, P + 3),
+                             range=(0, P + 2))
+    hist = hist.astype("float")
+    hist /= (hist.sum() + eps)
+    return hist
+
+
+
+def predict_image2(image_document_id):
+    try:
+        # Ambil image_document berdasarkan ID
+        image_document = ImageDocument.query.get(image_document_id)
+        if not image_document:
+            return False, "Image document tidak ditemukan."
+        
+        # --- PERUBAHAN 1: Path & Pemuatan Model ---
+        # Scaler tidak lagi digunakan
+        # Ganti dengan path ke model XGBoost .pkl Anda
+        model_path = os.path.join(BASE_DIR, '..', 'model_deteksi_surat_glcm_lbp.pkl')
+
+        # Muat model XGBoost dengan joblib
+        model = joblib.load(os.path.abspath(model_path))
+        
+        # --- PERUBAHAN 2: EKSTRAKSI FITUR GABUNGAN (GLCM + LBP) ---
+        # Baca gambar sekali saja
+        print(f"Ekstraksi fitur untuk gambar: {image_document.file_path}")
+        img = imread(os.path.join('static', image_document.file_path), as_gray=True)
+        img = (img * 255).astype('uint8')
+
+        # Ekstrak kedua jenis fitur
+        fitur_glcm = ekstrak_glcm_fitur2(img)
+        fitur_lbp = ekstrak_lbp_fitur(img)
+        
+        # Gabungkan keduanya menjadi satu vektor fitur
+        fitur_gabungan = np.hstack([fitur_glcm, fitur_lbp])
+        fitur_untuk_prediksi = fitur_gabungan.reshape(1, -1)
+
+        # --- PERUBAHAN 3: Prediksi dengan .predict_proba() ---
+        # Dapatkan probabilitas untuk setiap kelas [prob_asli, prob_palsu]
+        prediksi_proba = model.predict_proba(fitur_untuk_prediksi)[0]
+        print(f"Probabilitas prediksi: {prediksi_proba}")
+        probabilitas_asli = prediksi_proba[0] # Ambil probabilitas untuk kelas 'Asli' (label 0)
+        probabilitas_palsu = prediksi_proba[1] # Ambil probabilitas untuk kelas 'Palsu' (label 1)
+        print(f"Probabilitas 'Asli': {probabilitas_asli:.4f}")
+        print(f"Probabilitas 'Palsu': {probabilitas_palsu:.4f}")
+
+        # --- PERUBAHAN 4: Logika disesuaikan untuk output predict_proba ---
+        # Jika probabilitas 'Palsu' < 0.5, maka prediksinya adalah 'Asli'
+        if probabilitas_palsu < 0.5:
+            result = "asli"
+            confidence = 1 - probabilitas_palsu # Keyakinan adalah probabilitas kelas 'Asli'
+            print(f"✅ Prediksi: ASLI ({confidence*100:.2f}% yakin)")
+        else:
+            result = "palsu"
+            confidence = probabilitas_palsu # Keyakinan adalah probabilitas kelas 'Palsu'
+            print(f"❌ Prediksi: PALSU ({confidence*100:.2f}% yakin)")
+
+        prediction = Prediction(
+            image_document_id=image_document.id,
+            result=result,
+            confidence=float(confidence) # Pastikan tipe datanya float
+        )
+        db.session.add(prediction)
+        db.session.commit()
+        return True, "Prediksi berhasil."
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error during prediction: {str(e)}")
+        return False, f"Terjadi kesalahan: {str(e)}"

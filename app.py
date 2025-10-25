@@ -8,7 +8,8 @@ from flask_login import LoginManager
 
 
 app = Flask(__name__, template_folder="views")
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://django:root@localhost/gpaper'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://django:root@localhost/gpaper' 
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://geniusPaper:gp2025$#@localhost/geniusPaper' 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 app.secret_key = 'INI_SECRET_KEY'
 

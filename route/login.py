@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
-from controller.AuthController import register_user ,login_user
+from controller.AuthController import register_user ,login_user, logout_user
 
 login_bp = Blueprint('login', __name__)
 
@@ -30,4 +30,12 @@ def login_post():
     flash(message, 'success' if success else 'error')
     if success:
         return redirect(url_for('home.home_index'))
+    return redirect(request.referrer)
+
+@login_bp.get('/logout')
+def logout_get():
+    success, message = logout_user()
+    flash(message, 'success' if success else 'error')
+    if success:
+        return redirect(url_for('login.login_index'))
     return redirect(request.referrer)
