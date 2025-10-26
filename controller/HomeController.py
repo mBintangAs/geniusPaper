@@ -13,11 +13,24 @@ import joblib
 from tensorflow.keras.models import load_model
 from skimage.io import imread
 from skimage.feature import graycomatrix, graycoprops
+from datetime import datetime, timezone, timedelta
+
 import numpy as np
 
 UPLOAD_FOLDER = 'static/uploads'  # Pastikan folder ini ada
 ALLOWED_MIMETYPES = {'application/pdf', 'image/jpeg', 'image/png','image/jpg'}
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def log(text, level='INFO'):
+    try:
+        now = datetime.now(timezone.utc) + timedelta(hours=7)  # UTC+7
+        log_path = os.path.abspath(os.path.join(BASE_DIR, '..', 'log.txt'))
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(f"[{now.strftime('%Y-%m-%d %H:%M:%S %z')}] {level}: {text}\n")
+    except Exception:
+        # Jangan lempar error logging untuk mencegah cascade failure
+        pass
 
 def allowed_file(file):
     return file and file.mimetype in ALLOWED_MIMETYPES
@@ -28,7 +41,7 @@ def upload_image(filename, file, user_id):
 
     if not allowed_file(file):
         return False, "Hanya file PDF, JPG, JPEG, dan PNG yang diperbolehkan."
-
+    log(f"Memproses gambar {filename}")
      # Ambil nama asli file dari file.filename, lalu tambahkan timestamp dan ekstensi
     original_filename = secure_filename(file.filename)
     name, ext = os.path.splitext(original_filename)
@@ -37,8 +50,8 @@ def upload_image(filename, file, user_id):
     save_path = os.path.join(UPLOAD_FOLDER, safe_filename)
 
     try:
-        # Simpan file ke fol
-        # der
+        # Simpan file ke folder
+        log(f"meyimpan file {filename} ke folder {save_path}")
         file.save(save_path)
 
         # Simpan metadata ke database
@@ -49,13 +62,16 @@ def upload_image(filename, file, user_id):
         )
         db.session.add(document)
         db.session.commit()
+        log(f"menyimpan {filename} ke database")
         if ext.lower() == '.pdf':
             images = convert_from_path(save_path, dpi=300, poppler_path="/usr/bin")
+            log(f"Konversi PDF ke image perhalaman")
             for i, image in enumerate(images):
+                log(f"Memproses halaman {i+1}")
                 img_filename = f"{uuid.uuid4().hex}_page{i+1}.jpg"
                 img_path = os.path.join(UPLOAD_FOLDER, img_filename)
                 image.save(img_path)
-                print(f"Saved image: {img_path}")
+                log(f"Saved image: {img_path}")
                 image_doc = ImageDocument(
                     document_id=document.id,
                     filename=img_filename,
@@ -72,7 +88,7 @@ def upload_image(filename, file, user_id):
             )
             db.session.add(image_doc)
             db.session.commit()
-            print(f"Saved image document: {image_doc.file_path}")
+            log(f"Saved image document: {image_doc.file_path}")
             predict_image2(image_doc.id)
 
         return True, "File berhasil diupload dan disimpan."
@@ -100,18 +116,18 @@ def predict_image(image_document_id):
 
         # Prediksi
         prediksi = model.predict(fitur_uji_scaled)[0][0]
-        print(f"Prediksi: {prediksi}")
+        log(f"Prediksi: {prediksi}")
 
 
         #  kenapa di bawah 0.5 asli, karena label 0 itu asli dan 1 itu palsu
         # jika prediksi mendekati angka 0 maka dia asli,
         # dan sebaliknya jika dia menjauhi 0 atau mendekati 1 maka dia palsu
         if prediksi < 0.5:
-            print(f"✅ Prediksi: ASLI ({(1-prediksi)*100:.2f}% yakin)")
+            log(f"✅ Prediksi: ASLI ({(1-prediksi)*100:.2f}% yakin)")
             result = "asli"  # atau "palsu"
             confidence = (1-prediksi)  # Contoh nilai confidence
         else:
-            print(f"❌ Prediksi: PALSU ({prediksi*100:.2f}% yakin)")
+            log(f"❌ Prediksi: PALSU ({prediksi*100:.2f}% yakin)")
             result = "palsu"  # atau "palsu"
             confidence = prediksi  # Contoh nilai confidence
 
@@ -125,7 +141,7 @@ def predict_image(image_document_id):
         return True, "Prediksi berhasil."
     except Exception as e:
         db.session.rollback()
-        print(f"Error during prediction: {str(e)}")
+        log(f"Error during prediction: {str(e)}")
         return False, f"Terjadi kesalahan: {str(e)}"
     
 def fetch_all_documents(user_id):
@@ -133,14 +149,14 @@ def fetch_all_documents(user_id):
         documents = Document.query.filter_by(user_id=user_id).order_by(Document.created_at.desc()).all()
         return documents
     except Exception as e:
-        print(f"Error fetching documents: {str(e)}")
+        log(f"Error fetching documents: {str(e)}")
         return []
 def get_document_by_id(document_id,user_id):
     try:
         document = Document.query.filter_by(user_id=user_id, id=document_id).first()
         return document
     except Exception as e:
-        print(f"Error fetching document by ID: {str(e)}")
+        log(f"Error fetching document by ID: {str(e)}")
         return None
 
 
@@ -198,6 +214,7 @@ def predict_image2(image_document_id):
         # --- PERUBAHAN 1: Path & Pemuatan Model ---
         # Scaler tidak lagi digunakan
         # Ganti dengan path ke model XGBoost .pkl Anda
+        log("Load Pickle")
         model_path = os.path.join(BASE_DIR, '..', 'model_deteksi_surat_glcm_lbp.pkl')
 
         # Muat model XGBoost dengan joblib
@@ -205,12 +222,14 @@ def predict_image2(image_document_id):
         
         # --- PERUBAHAN 2: EKSTRAKSI FITUR GABUNGAN (GLCM + LBP) ---
         # Baca gambar sekali saja
-        print(f"Ekstraksi fitur untuk gambar: {image_document.file_path}")
+        log(f"Ekstraksi fitur untuk gambar: {image_document.file_path}")
         img = imread(os.path.join('static', image_document.file_path), as_gray=True)
         img = (img * 255).astype('uint8')
 
         # Ekstrak kedua jenis fitur
+        log("Ekstrak GLCM FITUR")
         fitur_glcm = ekstrak_glcm_fitur2(img)
+        log("Ekstrak LBP FITUR")
         fitur_lbp = ekstrak_lbp_fitur(img)
         
         # Gabungkan keduanya menjadi satu vektor fitur
@@ -219,23 +238,24 @@ def predict_image2(image_document_id):
 
         # --- PERUBAHAN 3: Prediksi dengan .predict_proba() ---
         # Dapatkan probabilitas untuk setiap kelas [prob_asli, prob_palsu]
+        log("Melakukan prediksi")
         prediksi_proba = model.predict_proba(fitur_untuk_prediksi)[0]
-        print(f"Probabilitas prediksi: {prediksi_proba}")
+        log(f"Probabilitas prediksi: {prediksi_proba}")
         probabilitas_asli = prediksi_proba[0] # Ambil probabilitas untuk kelas 'Asli' (label 0)
         probabilitas_palsu = prediksi_proba[1] # Ambil probabilitas untuk kelas 'Palsu' (label 1)
-        print(f"Probabilitas 'Asli': {probabilitas_asli:.4f}")
-        print(f"Probabilitas 'Palsu': {probabilitas_palsu:.4f}")
+        log(f"Probabilitas 'Asli': {probabilitas_asli:.4f}")
+        log(f"Probabilitas 'Palsu': {probabilitas_palsu:.4f}")
 
         # --- PERUBAHAN 4: Logika disesuaikan untuk output predict_proba ---
         # Jika probabilitas 'Palsu' < 0.5, maka prediksinya adalah 'Asli'
         if probabilitas_palsu < 0.5:
             result = "asli"
             confidence = 1 - probabilitas_palsu # Keyakinan adalah probabilitas kelas 'Asli'
-            print(f"✅ Prediksi: ASLI ({confidence*100:.2f}% yakin)")
+            log(f"✅ Prediksi: ASLI ({confidence*100:.2f}% yakin)")
         else:
             result = "palsu"
             confidence = probabilitas_palsu # Keyakinan adalah probabilitas kelas 'Palsu'
-            print(f"❌ Prediksi: PALSU ({confidence*100:.2f}% yakin)")
+            log(f"❌ Prediksi: PALSU ({confidence*100:.2f}% yakin)")
 
         prediction = Prediction(
             image_document_id=image_document.id,
@@ -244,8 +264,9 @@ def predict_image2(image_document_id):
         )
         db.session.add(prediction)
         db.session.commit()
+        log("Menyimpan prediksi ke database")
         return True, "Prediksi berhasil."
     except Exception as e:
         db.session.rollback()
-        print(f"Error during prediction: {str(e)}")
+        log(f"Error during prediction: {str(e)}")
         return False, f"Terjadi kesalahan: {str(e)}"
